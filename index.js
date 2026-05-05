@@ -1,5 +1,5 @@
 // Configuration
-const API_URL = "https://pokebuildapi.fr/api/v1/pokemon";
+const API_URL = "https://pokeapi.co/api/v2/pokemon?limit=151";
 
 // Variables globales
 let allPokemon = [];
@@ -106,27 +106,45 @@ function clearSearch() {
 }
 
 // Charger tous les Pokémon depuis l'API
-function loadPokemon() {
+async function loadPokemon() {
     pokemonCount.textContent = "Chargement...";
 
-    fetch(API_URL)
-        .then(response => response.json())
-        .then(data => {
-            allPokemon = data;
-            filteredPokemon = [...allPokemon];
-            displayPokemon(filteredPokemon);
-            updateStats();
-            console.log(`${data.length} Pokémon chargés !`);
-        })
-        .catch(error => {
-            console.error('Erreur lors du chargement:', error);
-            pokedex.innerHTML = `
+    try {
+        const response = await fetch(API_URL);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const detailPromises = data.results.map(async (pokemon) => {
+            const detailResponse = await fetch(pokemon.url);
+            if (!detailResponse.ok) {
+                throw new Error(`HTTP ${detailResponse.status} sur ${pokemon.name}`);
+            }
+
+            const detail = await detailResponse.json();
+            return {
+                id: detail.id,
+                name: detail.name,
+                image: detail.sprites.front_default || "",
+                apiTypes: detail.types.map(t => ({ name: t.type.name }))
+            };
+        });
+
+        allPokemon = await Promise.all(detailPromises);
+        filteredPokemon = [...allPokemon];
+        displayPokemon(filteredPokemon);
+        updateStats();
+        console.log(`${allPokemon.length} Pokémon chargés !`);
+    } catch (error) {
+        console.error('Erreur lors du chargement:', error);
+        pokedex.innerHTML = `
             <div style="grid-column: 1 / -1; text-align: center; padding: 2rem;">
                 <h3 style="color: red;">Erreur de chargement</h3>
                 <p>Impossible de charger les Pokémon</p>
             </div>
         `;
-        });
+    }
 }
 
 // Événements
